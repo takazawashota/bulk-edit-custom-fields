@@ -845,6 +845,10 @@ function cfbe_render_page() {
         // 各フィールドの保存された値を管理するオブジェクト
         const savedFieldValues = {};
         
+        // 全フィールド削除/復元ボタンのイベント用変数
+        let allFieldsSaved = {};
+        let allFieldsCleared = false;
+        
         // 項目ごと削除/復元ボタンのイベント
         document.querySelectorAll('.cfbe-clear-field-btn').forEach(button => {
             button.addEventListener('click', function() {
@@ -856,13 +860,29 @@ function cfbe_render_page() {
                 
                 if (isCleared) {
                     // 復元処理
+                    let hasDataToRestore = false;
+                    
+                    // まず savedFieldValues から復元を試行
                     if (savedFieldValues[fieldKey]) {
                         fieldInputs.forEach((el, index) => {
                             if (savedFieldValues[fieldKey][index] !== undefined) {
                                 el.value = savedFieldValues[fieldKey][index];
+                                hasDataToRestore = true;
                             }
                         });
                     }
+                    
+                    // savedFieldValues にデータがない場合（一括削除後）、allFieldsSaved から復元
+                    if (!hasDataToRestore && Object.keys(allFieldsSaved).length > 0) {
+                        const allInputs = document.querySelectorAll('.cfbe-table input[type="text"], .cfbe-table textarea');
+                        fieldInputs.forEach(el => {
+                            const globalIndex = Array.from(allInputs).indexOf(el);
+                            if (globalIndex !== -1 && allFieldsSaved[globalIndex] !== undefined) {
+                                el.value = allFieldsSaved[globalIndex];
+                            }
+                        });
+                    }
+                    
                     this.textContent = '削除';
                     this.classList.remove('cfbe-cleared');
                     this.title = 'この項目の全ての値を削除';
@@ -884,9 +904,6 @@ function cfbe_render_page() {
         });
         
         // 全フィールド削除/復元ボタンのイベント
-        let allFieldsSaved = {};
-        let allFieldsCleared = false;
-        
         window.cfbeClearAllFields = function() {
             const allInputs = document.querySelectorAll('.cfbe-table input[type="text"], .cfbe-table textarea');
             const clearAllBtn = document.querySelector('.cfbe-clear-all-btn');
@@ -919,6 +936,20 @@ function cfbe_render_page() {
             } else {
                 // 全削除（現在の表示値 + 個別削除済みの値を保存してから削除）
                 allFieldsSaved = {};
+                
+                // 各フィールドごとのデータも保存（個別復元用）
+                document.querySelectorAll('.cfbe-clear-field-btn').forEach(btn => {
+                    const fieldKey = btn.dataset.field;
+                    const fieldInputs = document.querySelectorAll(`td[data-field="${fieldKey}"] input[type="text"], td[data-field="${fieldKey}"] textarea`);
+                    
+                    // まだ個別削除されていないフィールドの場合、現在の値を保存
+                    if (!savedFieldValues[fieldKey]) {
+                        savedFieldValues[fieldKey] = [];
+                        fieldInputs.forEach((el, index) => {
+                            savedFieldValues[fieldKey][index] = el.value;
+                        });
+                    }
+                });
                 
                 allInputs.forEach((el, index) => {
                     // 現在表示されている値を保存

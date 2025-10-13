@@ -22,7 +22,7 @@ function cfbe_add_admin_menu() {
         'Bulk Edit Custom Fields',
         'Bulk Edit Custom Fields',
         'edit_posts',
-        'custom-fields-bulk-edit',
+        'bulk-edit-custom-fields',
         'cfbe_render_page',
         'dashicons-edit',
         100
@@ -59,12 +59,22 @@ function cfbe_ajax_save_fields() {
             if (is_array($fields)) {
                 foreach ($fields as $field_key => $field_value) {
                     $field_key = sanitize_text_field($field_key);
-                    $field_value = sanitize_textarea_field($field_value);
+                    
+                    // 配列データ（チェックボックス等）の処理
+                    if (is_array($field_value)) {
+                        // 配列の各要素をサニタイズ
+                        $field_value = array_map('sanitize_text_field', $field_value);
+                        error_log("CFBE AJAX Save: 配列データ処理 - Post ID: {$post_id}, Field: {$field_key}, Array: " . json_encode($field_value));
+                    } else {
+                        // 通常の文字列データの処理
+                        $field_value = sanitize_textarea_field($field_value);
+                    }
                     
                     $result = update_post_meta($post_id, $field_key, $field_value);
                     if ($result) {
                         $saved_count++;
-                        error_log("CFBE AJAX Save: 保存成功 - Post ID: {$post_id}, Field: {$field_key}, Value: {$field_value}");
+                        $value_for_log = is_array($field_value) ? json_encode($field_value) : $field_value;
+                        error_log("CFBE AJAX Save: 保存成功 - Post ID: {$post_id}, Field: {$field_key}, Value: {$value_for_log}");
                     } else {
                         error_log("CFBE AJAX Save: 保存失敗 - Post ID: {$post_id}, Field: {$field_key}");
                     }
@@ -203,10 +213,8 @@ function cfbe_render_page() {
                     // maybe_unserialize で自動的にシリアライズ解除
                     $value = maybe_unserialize($value);
                     
-                    // 配列やオブジェクトの場合はJSON形式に変換
-                    if (is_array($value) || is_object($value)) {
-                        $value = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-                    }
+                    // 配列データはそのまま保持（JSON変換しない）
+                    // チェックボックス配列として表示するため
                     
                     $post_data[$post->ID]['fields'][$meta_key] = $value;
                 }
@@ -258,7 +266,7 @@ function cfbe_render_page() {
         .cfbe-table-wrapper {
             overflow-x: auto;
             overflow-y: auto;
-            max-height: 100vh;
+            max-height: 70vh;
             background: #fff;
             border: 1px solid #c3c4c7;
             margin: 20px 0;
@@ -310,6 +318,10 @@ function cfbe_render_page() {
             padding: 8px !important;
             border-right: 1px solid #c3c4c7;
             box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+
+        .cfbe-col-checkbox input {
+            margin-right: 0;
         }
         
         .cfbe-field-header,
@@ -508,6 +520,10 @@ function cfbe_render_page() {
             background-color: #ffcccc !important;
         }
         
+        .cfbe-row-deleted .cfbe-col-fixed {
+            background-color: #ffe6e6 !important;
+        }
+        
         /* 保存プログレスバーのスタイル */
         .cfbe-progress-bar {
             width: 100%;
@@ -623,6 +639,92 @@ function cfbe_render_page() {
 
         .cfbe-help-text {
             margin-left: 10px;
+        }
+        
+        /* チェックボックス配列のスタイル */
+        .cfbe-checkbox-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            min-width: 200px;
+            max-width: 300px;
+        }
+        
+        .cfbe-checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 8px;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        
+        .cfbe-checkbox-item:hover {
+            background-color: #f0f0f0;
+        }
+        
+        .cfbe-checkbox-item input[type="checkbox"] {
+            margin: 0;
+            cursor: pointer;
+        }
+        
+        .cfbe-checkbox-item span {
+            flex: 1;
+            word-break: break-word;
+        }
+        
+        .cfbe-remove-checkbox {
+            background: #dc3232;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s ease;
+        }
+        
+        .cfbe-remove-checkbox:hover {
+            background: #b32d2e;
+        }
+        
+        .cfbe-add-checkbox {
+            display: flex;
+            gap: 5px;
+            margin-top: 5px;
+            padding-top: 8px;
+            border-top: 1px solid #ddd;
+        }
+        
+        .cfbe-new-option {
+            flex: 1;
+            padding: 4px 6px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-size: 13px;
+        }
+        
+        .cfbe-add-btn {
+            padding: 4px 8px;
+            background-color: #0073aa;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+        
+        .cfbe-add-btn:hover {
+            background-color: #005a87;
         }
     </style>
 
@@ -852,8 +954,14 @@ function cfbe_render_page() {
                                         $value = isset($post_data[$post->ID]['fields'][$key]) ? $post_data[$post->ID]['fields'][$key] : '';
                                         $field_name = "cfbe_field[{$post->ID}][{$key}]";
                                         
-                                        // 文字列に変換
-                                        $value_str = strval($value);
+                                        // 配列データを文字列として表示（入力フィールド形式）
+                                        if (is_array($value)) {
+                                            // 配列を JSON 文字列として表示
+                                            $value_str = json_encode($value, JSON_UNESCAPED_UNICODE);
+                                        } else {
+                                            // 通常の文字列データ
+                                            $value_str = strval($value);
+                                        }
                                         
                                         // 長いテキストや改行を含む場合はテキストエリア
                                         if (strlen($value_str) > 60 || strpos($value_str, "\n") !== false) {
@@ -931,6 +1039,9 @@ function cfbe_render_page() {
     </div>
 
     <script>
+        // WordPress AJAX URL定義
+        var ajaxurl = '<?php echo admin_url('admin-ajax.php'); ?>';
+        
         // AJAX保存機能
         document.addEventListener('DOMContentLoaded', function() {
             const saveBtn = document.getElementById('cfbe-ajax-save-btn');
@@ -940,10 +1051,27 @@ function cfbe_render_page() {
         });
         
         async function cfbeAjaxSave() {
+            console.log('🚀 AJAX保存処理開始');
+            
             const saveBtn = document.getElementById('cfbe-ajax-save-btn');
             const progressDiv = document.getElementById('cfbe-save-progress');
             const progressFill = document.querySelector('.cfbe-progress-fill');
             const progressText = document.querySelector('.cfbe-progress-text');
+            
+            // 要素の存在確認
+            if (!saveBtn) {
+                console.error('❌ 保存ボタンが見つかりません');
+                alert('保存ボタンが見つかりません');
+                return;
+            }
+            
+            if (!progressDiv || !progressFill || !progressText) {
+                console.error('❌ プログレスバー要素が見つかりません');
+                alert('プログレスバー要素が見つかりません');
+                return;
+            }
+            
+            console.log('✅ UI要素の確認完了');
             
             // ボタンを無効化
             saveBtn.disabled = true;
@@ -951,9 +1079,41 @@ function cfbe_render_page() {
             progressDiv.style.display = 'block';
             
             try {
+                console.log('📋 フォームデータを収集中...');
                 // フォームデータを収集
                 const formData = collectFormData();
-                console.log('収集されたフォームデータ:', formData);
+                console.log('✅ フォームデータ収集完了:', Object.keys(formData).length, 'posts');
+                
+                // 統計情報を計算
+                let totalPosts = Object.keys(formData).length;
+                let totalFields = 0;
+                let emptyFields = 0;
+                
+                for (const postId in formData) {
+                    for (const fieldKey in formData[postId]) {
+                        totalFields++;
+                        const fieldValue = formData[postId][fieldKey];
+                        
+                        // 配列データか文字列データかで空判定を変える
+                        let isEmpty = false;
+                        if (Array.isArray(fieldValue)) {
+                            isEmpty = fieldValue.length === 0;
+                        } else if (typeof fieldValue === 'string') {
+                            isEmpty = fieldValue.trim() === '';
+                        }
+                        
+                        if (isEmpty) {
+                            emptyFields++;
+                        }
+                    }
+                }
+                
+                console.log('📊 フォームデータ統計:', {
+                    投稿数: totalPosts,
+                    総フィールド数: totalFields,
+                    空のフィールド数: emptyFields,
+                    削除対象数: emptyFields
+                });
                 
                 const chunks = chunkFormData(formData, 50); // 50件ずつ分割
                 console.log('チャンク分割結果:', chunks.length, 'chunks');
@@ -971,22 +1131,46 @@ function cfbe_render_page() {
                     
                     console.log(`チャンク ${i + 1} を送信中:`, chunks[i]);
                     
+                    const formData = new URLSearchParams({
+                        action: 'cfbe_save_fields',
+                        nonce: '<?php echo wp_create_nonce('cfbe_bulk_edit'); ?>',
+                        chunk_data: JSON.stringify(chunks[i])
+                    });
+                    
+                    console.log('送信データ:', {
+                        action: 'cfbe_save_fields',
+                        nonce: '<?php echo wp_create_nonce('cfbe_bulk_edit'); ?>',
+                        chunk_data_size: JSON.stringify(chunks[i]).length,
+                        ajaxurl: ajaxurl
+                    });
+                    
                     const response = await fetch(ajaxurl, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/x-www-form-urlencoded',
                         },
-                        body: new URLSearchParams({
-                            action: 'cfbe_save_fields',
-                            nonce: '<?php echo wp_create_nonce('cfbe_bulk_edit'); ?>',
-                            chunk_data: JSON.stringify(chunks[i])
-                        })
+                        body: formData
                     });
                     
-                    console.log('レスポンス:', response.status, response.statusText);
+                    console.log('レスポンス:', response.status, response.statusText, response.url);
                     
-                    const result = await response.json();
-                    console.log('結果:', result);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
+                    const responseText = await response.text();
+                    console.log('生のレスポンステキスト:', responseText);
+                    
+                    let result;
+                    try {
+                        result = JSON.parse(responseText);
+                    } catch (parseError) {
+                        console.error('JSON解析エラー:', parseError);
+                        console.error('レスポンス内容:', responseText);
+                        throw new Error('サーバーからの無効なレスポンス');
+                    }
+                    
+                    console.log('解析された結果:', result);
                     
                     if (result.success) {
                         savedTotal += result.data.saved_count;
@@ -1024,19 +1208,41 @@ function cfbe_render_page() {
             console.log('見つかった入力フィールド数:', inputs.length);
             
             inputs.forEach((input, index) => {
-                if (input.name && input.value !== '') {
-                    console.log(`フィールド ${index}: name="${input.name}", value="${input.value}"`);
+                if (input.name) {
                     // input.name は "cfbe_field[post_id][field_key]" の形式
                     const matches = input.name.match(/cfbe_field\[(\d+)\]\[(.+?)\]/);
                     if (matches) {
                         const postId = matches[1];
                         const fieldKey = matches[2];
+                        let value = input.value.trim(); // 前後の空白を除去
                         
                         if (!formData[postId]) {
                             formData[postId] = {};
                         }
-                        formData[postId][fieldKey] = input.value;
-                        console.log(`追加: postId=${postId}, fieldKey=${fieldKey}, value=${input.value}`);
+                        
+                        // JSON文字列かどうかチェックして配列に変換
+                        if (value.startsWith('[') && value.endsWith(']')) {
+                            try {
+                                const parsedArray = JSON.parse(value);
+                                if (Array.isArray(parsedArray)) {
+                                    value = parsedArray;
+                                    console.log(`JSON配列を解析: postId=${postId}, fieldKey=${fieldKey}, array=`, parsedArray);
+                                }
+                            } catch (e) {
+                                console.log(`JSON解析失敗（文字列として処理）: postId=${postId}, fieldKey=${fieldKey}, value="${value}"`);
+                            }
+                        }
+                        
+                        // 空の値でも明示的に送信（サーバー側で削除処理される）
+                        formData[postId][fieldKey] = value;
+                        
+                        if (Array.isArray(value)) {
+                            console.log(`配列データ: postId=${postId}, fieldKey=${fieldKey}, array=`, value);
+                        } else if (value !== '') {
+                            console.log(`値あり: postId=${postId}, fieldKey=${fieldKey}, value="${value}"`);
+                        } else {
+                            console.log(`空の値（削除対象): postId=${postId}, fieldKey=${fieldKey}`);
+                        }
                     } else {
                         console.log('マッチしなかったフィールド:', input.name);
                     }
@@ -1637,20 +1843,30 @@ function cfbe_render_page() {
                 const row = checkbox.closest('tr');
                 const rowFieldInputs = row.querySelectorAll('.cfbe-field-cell input[type="text"], .cfbe-field-cell textarea');
                 
-                console.log(`行削除処理開始: 投稿ID ${postId}`);
+                console.log(`🗑️ 行削除処理開始: 投稿ID ${postId}, フィールド数: ${rowFieldInputs.length}`);
                 
                 // 行削除データを保存
                 if (!savedRowValues[postId]) {
                     savedRowValues[postId] = [];
+                    let deletedCount = 0;
                     rowFieldInputs.forEach((input, index) => {
                         savedRowValues[postId][index] = input.value;
+                        if (input.value.trim() !== '') {
+                            deletedCount++;
+                        }
                     });
+                    console.log(`📝 保存データ: 投稿ID ${postId}, ${deletedCount}個のフィールドに値あり`);
                 }
                 
                 // フィールドを空にする
+                let clearedCount = 0;
                 rowFieldInputs.forEach(input => {
+                    if (input.value.trim() !== '') {
+                        clearedCount++;
+                    }
                     input.value = '';
                 });
+                console.log(`🔄 削除完了: 投稿ID ${postId}, ${clearedCount}個のフィールドを空に設定`);
                 
                 // 行の見た目を削除状態に変更
                 row.classList.add('cfbe-row-deleted');
@@ -1898,6 +2114,8 @@ function cfbe_render_page() {
                 console.log('🔄 cfbeClearAllFields処理完了 - ボタン再有効化');
             }
         }
+        
+
     </script>
     <?php
 }

@@ -246,26 +246,12 @@ function cfbe_render_page() {
         
         .cfbe-col-title {
             left: 0;
-            min-width: 220px;
-            max-width: 300px;
-        }
-        
-        .cfbe-col-type {
-            left: 220px;
-            width: 120px;
-            min-width: 120px;
-            text-align: center;
-        }
-        
-        .cfbe-col-status {
-            left: 340px;
-            width: 100px;
-            min-width: 100px;
-            text-align: center;
+            min-width: 300px;
+            max-width: 400px;
         }
         
         .cfbe-col-actions {
-            left: 440px;
+            left: 300px;
             width: 120px;
             min-width: 120px;
             text-align: center;
@@ -335,12 +321,13 @@ function cfbe_render_page() {
         
         .cfbe-post-type {
             display: inline-block;
-            padding: 4px 10px;
+            padding: 2px 6px;
             background: #e0e0e0;
             border-radius: 3px;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 500;
             color: #333;
+            margin: 0 2px;
         }
         
         .cfbe-page-id {
@@ -348,6 +335,13 @@ function cfbe_render_page() {
             color: #646970;
             margin-top: 5px;
             font-weight: normal;
+            line-height: 1.4;
+        }
+        
+        .cfbe-page-id .cfbe-status {
+            padding: 2px 6px;
+            font-size: 10px;
+            margin: 0 2px;
         }
         
         .cfbe-submit-section {
@@ -649,8 +643,6 @@ function cfbe_render_page() {
                     <thead>
                         <tr>
                             <th class="cfbe-col-fixed cfbe-col-title">投稿タイトル</th>
-                            <th class="cfbe-col-fixed cfbe-col-type">投稿タイプ</th>
-                            <th class="cfbe-col-fixed cfbe-col-status">ステータス</th>
                             <th class="cfbe-col-fixed cfbe-col-actions">行操作</th>
                             <?php foreach ($custom_field_keys as $key): ?>
                                 <th class="cfbe-field-header" data-field="<?php echo esc_attr($key); ?>">
@@ -685,25 +677,23 @@ function cfbe_render_page() {
                                             <?php echo esc_html($post_data[$post->ID]['title'] ?: '(タイトルなし)'); ?>
                                         </a>
                                     </strong>
-                                    <div class="cfbe-page-id">ID: <?php echo $post->ID; ?></div>
-                                </td>
-                                <td class="cfbe-col-fixed cfbe-col-type">
-                                    <?php 
-                                    $post_type_obj = get_post_type_object($post_data[$post->ID]['type']);
-                                    echo '<span class="cfbe-post-type">' . esc_html($post_type_obj ? $post_type_obj->label : $post_data[$post->ID]['type']) . '</span>';
-                                    ?>
-                                </td>
-                                <td class="cfbe-col-fixed cfbe-col-status">
-                                    <?php 
-                                    $status_labels = array(
-                                        'publish' => '公開',
-                                        'draft' => '下書き',
-                                        'pending' => '承認待ち',
-                                        'private' => '非公開'
-                                    );
-                                    $status = $post_data[$post->ID]['status'];
-                                    echo '<span class="cfbe-status cfbe-status-' . esc_attr($status) . '">' . esc_html($status_labels[$status] ?? $status) . '</span>';
-                                    ?>
+                                    <div class="cfbe-page-id">
+                                        ID: <?php echo $post->ID; ?> | 
+                                        <?php 
+                                        $post_type_obj = get_post_type_object($post_data[$post->ID]['type']);
+                                        echo '<span class="cfbe-post-type">' . esc_html($post_type_obj ? $post_type_obj->label : $post_data[$post->ID]['type']) . '</span>';
+                                        ?> | 
+                                        <?php 
+                                        $status_labels = array(
+                                            'publish' => '公開',
+                                            'draft' => '下書き',
+                                            'pending' => '承認待ち',
+                                            'private' => '非公開'
+                                        );
+                                        $status = $post_data[$post->ID]['status'];
+                                        echo '<span class="cfbe-status cfbe-status-' . esc_attr($status) . '">' . esc_html($status_labels[$status] ?? $status) . '</span>';
+                                        ?>
+                                    </div>
                                 </td>
                                 <td class="cfbe-col-fixed cfbe-col-actions">
                                     <button type="button" class="cfbe-clear-row-btn button button-small" 

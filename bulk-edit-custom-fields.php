@@ -1091,104 +1091,73 @@ function cfbe_render_page() {
         let allFieldsSaved = {};
         let allFieldsCleared = false;
         
-        // 統一された状態更新関数（デバッグ付き）
-        function updateAllButtonStates(context = '') {
-            console.log(`ボタン状態更新: ${context}`);
-            updateFieldButtonStates();
-            updateRowButtonStates();
-            updateBulkButtonState();
-        }
+        // 統一された状態管理システム
         
-        // 特定フィールドのみ更新する関数
-        function updateSpecificFieldButton(fieldKey) {
-            const btn = document.querySelector(`.cfbe-clear-field-btn[data-field="${fieldKey}"]`);
-            if (!btn) return;
+        // 統合状態チェック関数 - 全ての削除状態を統一的に判定
+        function getUnifiedState() {
+            const allInputs = document.querySelectorAll('.cfbe-table input[type="text"], .cfbe-table textarea');
+            const state = {
+                totalInputs: allInputs.length,
+                emptyInputs: 0,
+                hasIndividualDeletes: Object.keys(savedFieldValues).length > 0,
+                hasRowDeletes: Object.keys(savedRowValues).length > 0,
+                hasBulkDelete: allFieldsCleared,
+                fieldStates: {},
+                rowStates: {}
+            };
             
-            const fieldInputs = document.querySelectorAll(`td[data-field="${fieldKey}"] input[type="text"], td[data-field="${fieldKey}"] textarea`);
-            let allFieldsEmpty = true;
-            let hasRestorationData = false;
-            
-            fieldInputs.forEach(input => {
-                if (input.value.trim() !== '') {
-                    allFieldsEmpty = false;
+            // 各入力フィールドの状態を記録
+            allInputs.forEach(input => {
+                if (input.value.trim() === '') {
+                    state.emptyInputs++;
+                }
+                
+                // フィールドごとの集計
+                const fieldKey = input.closest('td').dataset.field;
+                const postId = input.closest('tr').dataset.postId;
+                
+                if (fieldKey) {
+                    if (!state.fieldStates[fieldKey]) {
+                        state.fieldStates[fieldKey] = { total: 0, empty: 0, hasData: false };
+                    }
+                    state.fieldStates[fieldKey].total++;
+                    if (input.value.trim() === '') {
+                        state.fieldStates[fieldKey].empty++;
+                    }
+                    // 復元可能なデータがあるか
+                    state.fieldStates[fieldKey].hasData = savedFieldValues[fieldKey] || allFieldsCleared;
+                }
+                
+                if (postId) {
+                    if (!state.rowStates[postId]) {
+                        state.rowStates[postId] = { total: 0, empty: 0, hasData: false };
+                    }
+                    state.rowStates[postId].total++;
+                    if (input.value.trim() === '') {
+                        state.rowStates[postId].empty++;
+                    }
+                    // 復元可能なデータがあるか
+                    state.rowStates[postId].hasData = savedRowValues[postId] || allFieldsCleared;
                 }
             });
             
-            if (savedFieldValues[fieldKey] || allFieldsCleared) {
-                hasRestorationData = true;
-            }
-            
-            if (allFieldsEmpty && hasRestorationData) {
-                btn.textContent = '復元';
-                btn.classList.add('cfbe-cleared');
-                btn.title = 'この項目の値を復元';
-            } else {
-                btn.textContent = '削除';
-                btn.classList.remove('cfbe-cleared');
-                btn.title = 'この項目の全ての値を削除';
-            }
+            return state;
         }
         
-        // 特定行のみ更新する関数
-        function updateSpecificRowButton(postId) {
-            const button = document.querySelector(`button[data-post-id="${postId}"]`);
-            if (!button) return;
-            
-            const currentRow = button.closest('tr');
-            const rowFieldInputs = currentRow.querySelectorAll('.cfbe-field-cell input[type="text"], .cfbe-field-cell textarea');
-            
-            let allFieldsEmpty = true;
-            let hasRestorationData = false;
-            
-            rowFieldInputs.forEach(input => {
-                if (input.value.trim() !== '') {
-                    allFieldsEmpty = false;
-                }
-            });
-            
-            if (savedRowValues[postId] || allFieldsCleared) {
-                hasRestorationData = true;
-            }
-            
-            if (allFieldsEmpty && hasRestorationData) {
-                button.innerHTML = '↩️ 行復元';
-                button.classList.add('cfbe-cleared');
-                button.title = 'この行のフィールドを復元';
-            } else {
-                button.innerHTML = '🗑️ 行削除';
-                button.classList.remove('cfbe-cleared');
-                button.title = 'この行の全フィールドを削除';
-            }
-        }
-        
-        // 個別フィールドボタンの状態を更新
+        // フィールドボタン状態更新（統合状態使用）
         function updateFieldButtonStates() {
+            const state = getUnifiedState();
+            
             document.querySelectorAll('.cfbe-clear-field-btn').forEach(btn => {
                 const fieldKey = btn.dataset.field;
-                const fieldInputs = document.querySelectorAll(`td[data-field="${fieldKey}"] input[type="text"], td[data-field="${fieldKey}"] textarea`);
+                const fieldState = state.fieldStates[fieldKey];
                 
-                // 簡潔な判定ロジック
-                let allFieldsEmpty = true;
-                let hasRestorationData = false;
+                if (!fieldState) return;
                 
-                // フィールドが空かどうかをチェック
-                fieldInputs.forEach(input => {
-                    if (input.value.trim() !== '') {
-                        allFieldsEmpty = false;
-                    }
-                });
+                const allEmpty = fieldState.empty === fieldState.total;
+                const hasRestorationData = fieldState.hasData;
                 
-                // 復元データがあるかをチェック（優先順位順）
-                if (savedFieldValues[fieldKey]) {
-                    // 1. 個別削除データが存在
-                    hasRestorationData = true;
-                } else if (allFieldsCleared) {
-                    // 2. 一括削除状態
-                    hasRestorationData = true;
-                }
-                
-                // ボタン状態を決定
-                if (allFieldsEmpty && hasRestorationData) {
+                if (allEmpty && hasRestorationData) {
                     btn.textContent = '復元';
                     btn.classList.add('cfbe-cleared');
                     btn.title = 'この項目の値を復元';
@@ -1200,35 +1169,20 @@ function cfbe_render_page() {
             });
         }
         
-        // 行削除ボタンの状態を更新
+        // 行ボタン状態更新（統合状態使用）
         function updateRowButtonStates() {
+            const state = getUnifiedState();
+            
             document.querySelectorAll('.cfbe-clear-row-btn').forEach(button => {
                 const postId = button.getAttribute('data-post-id');
-                const currentRow = button.closest('tr');
-                const rowFieldInputs = currentRow.querySelectorAll('.cfbe-field-cell input[type="text"], .cfbe-field-cell textarea');
+                const rowState = state.rowStates[postId];
                 
-                // 簡潔な判定ロジック
-                let allFieldsEmpty = true;
-                let hasRestorationData = false;
+                if (!rowState) return;
                 
-                // 行内のフィールドが全て空かどうかをチェック
-                rowFieldInputs.forEach(input => {
-                    if (input.value.trim() !== '') {
-                        allFieldsEmpty = false;
-                    }
-                });
+                const allEmpty = rowState.empty === rowState.total;
+                const hasRestorationData = rowState.hasData;
                 
-                // 復元データがあるかをチェック（優先順位順）
-                if (savedRowValues[postId]) {
-                    // 1. 行削除データが存在
-                    hasRestorationData = true;
-                } else if (allFieldsCleared) {
-                    // 2. 一括削除状態
-                    hasRestorationData = true;
-                }
-                
-                // ボタン状態を決定
-                if (allFieldsEmpty && hasRestorationData) {
+                if (allEmpty && hasRestorationData) {
                     button.innerHTML = '↩️ 行復元';
                     button.classList.add('cfbe-cleared');
                     button.title = 'この行のフィールドを復元';
@@ -1240,7 +1194,7 @@ function cfbe_render_page() {
             });
         }
         
-        // 一括削除ボタンの状態を更新
+        // 一括ボタン状態更新（統合状態使用）
         function updateBulkButtonState() {
             const clearAllBtn = document.querySelector('.cfbe-clear-all-btn');
             if (!clearAllBtn) return;
@@ -1252,6 +1206,73 @@ function cfbe_render_page() {
                 clearAllBtn.innerHTML = '全てのフィールドを削除';
                 clearAllBtn.nextElementSibling.textContent = '※ 表示中の全ての入力値が削除されます';
             }
+        }
+        
+        // 統一された状態更新関数
+        function updateAllButtonStates(context = '') {
+            console.log(`統合状態更新: ${context}`);
+            const state = getUnifiedState();
+            console.log('現在の統合状態:', {
+                総入力数: state.totalInputs,
+                空の入力数: state.emptyInputs,
+                個別削除済み: state.hasIndividualDeletes,
+                行削除済み: state.hasRowDeletes,
+                一括削除済み: state.hasBulkDelete,
+                フィールド状態数: Object.keys(state.fieldStates).length,
+                行状態数: Object.keys(state.rowStates).length
+            });
+            
+            updateFieldButtonStates();
+            updateRowButtonStates();
+            updateBulkButtonState();
+        }
+        
+        // 特定要素のみ更新（効率化用）
+        function updateSpecificStates(affectedFields = [], affectedRows = []) {
+            const state = getUnifiedState();
+            
+            // 特定フィールドのボタン更新
+            affectedFields.forEach(fieldKey => {
+                const btn = document.querySelector(`.cfbe-clear-field-btn[data-field="${fieldKey}"]`);
+                if (btn && state.fieldStates[fieldKey]) {
+                    const fieldState = state.fieldStates[fieldKey];
+                    const allEmpty = fieldState.empty === fieldState.total;
+                    const hasRestorationData = fieldState.hasData;
+                    
+                    if (allEmpty && hasRestorationData) {
+                        btn.textContent = '復元';
+                        btn.classList.add('cfbe-cleared');
+                        btn.title = 'この項目の値を復元';
+                    } else {
+                        btn.textContent = '削除';
+                        btn.classList.remove('cfbe-cleared');
+                        btn.title = 'この項目の全ての値を削除';
+                    }
+                }
+            });
+            
+            // 特定行のボタン更新
+            affectedRows.forEach(postId => {
+                const button = document.querySelector(`button[data-post-id="${postId}"]`);
+                if (button && state.rowStates[postId]) {
+                    const rowState = state.rowStates[postId];
+                    const allEmpty = rowState.empty === rowState.total;
+                    const hasRestorationData = rowState.hasData;
+                    
+                    if (allEmpty && hasRestorationData) {
+                        button.innerHTML = '↩️ 行復元';
+                        button.classList.add('cfbe-cleared');
+                        button.title = 'この行のフィールドを復元';
+                    } else {
+                        button.innerHTML = '🗑️ 行削除';
+                        button.classList.remove('cfbe-cleared');
+                        button.title = 'この行の全フィールドを削除';
+                    }
+                }
+            });
+            
+            // 一括ボタンは常に更新
+            updateBulkButtonState();
         }
         
         // 進捗表示用の要素を作成
@@ -1442,16 +1463,13 @@ function cfbe_render_page() {
                     // 個別復元時は、savedFieldValuesから削除
                     delete savedFieldValues[fieldKey];
                     
-                    // 該当フィールドのボタンのみ更新
-                    updateSpecificFieldButton(fieldKey);
-                    // 影響を受ける行ボタンを更新
+                    // 統合状態管理で影響を受ける要素を更新
                     const affectedPostIds = new Set();
                     fieldInputs.forEach(input => {
                         const postId = input.closest('tr').dataset.postId;
                         if (postId) affectedPostIds.add(postId);
                     });
-                    affectedPostIds.forEach(postId => updateSpecificRowButton(postId));
-                    updateBulkButtonState();
+                    updateSpecificStates([fieldKey], Array.from(affectedPostIds));
                 } else {
                     // 削除処理（値を保存してから削除）
                     savedFieldValues[fieldKey] = [];
@@ -1469,16 +1487,13 @@ function cfbe_render_page() {
                     this.classList.add('cfbe-cleared');
                     this.title = 'この項目の値を復元';
                     
-                    // 該当フィールドのボタンのみ更新
-                    updateSpecificFieldButton(fieldKey);
-                    // 影響を受ける行ボタンを更新
+                    // 統合状態管理で影響を受ける要素を更新
                     const affectedPostIds = new Set();
                     fieldInputs.forEach(input => {
                         const postId = input.closest('tr').dataset.postId;
                         if (postId) affectedPostIds.add(postId);
                     });
-                    affectedPostIds.forEach(postId => updateSpecificRowButton(postId));
-                    updateBulkButtonState();
+                    updateSpecificStates([fieldKey], Array.from(affectedPostIds));
                 }
             });
         });
@@ -1558,94 +1573,11 @@ function cfbe_render_page() {
                         });
                     }
                     
-                    // 関連する個別フィールドボタンの状態を確認・更新
-                    rowFieldKeys.forEach(fieldKey => {
-                        const allFieldInputs = document.querySelectorAll(`td[data-field="${fieldKey}"] input[type="text"], td[data-field="${fieldKey}"] textarea`);
-                        
-                        // 一括削除後の行復元の場合の処理
-                        if (allFieldsCleared) {
-                            // このフィールドの全ての値が復元されているかチェック
-                            let allFieldsRestored = true;
-                            
-                            allFieldInputs.forEach((input, index) => {
-                                if (input.value.trim() === '') {
-                                    allFieldsRestored = false;
-                                }
-                            });
-                            
-                            const fieldBtn = document.querySelector(`.cfbe-clear-field-btn[data-field="${fieldKey}"]`);
-                            if (fieldBtn && allFieldsRestored) {
-                                // 全てのフィールドが復元されている場合、ボタンを初期状態に戻す
-                                fieldBtn.textContent = '削除';
-                                fieldBtn.classList.remove('cfbe-cleared');
-                                fieldBtn.title = 'この項目の全ての値を削除';
-                                console.log(`フィールド ${fieldKey} のボタンを「削除」状態に戻しました（一括削除後の行復元）`);
-                            }
-                        } else {
-                            // 通常の行削除後の復元の場合の処理
-                            // このフィールドの削除済み状態をチェック
-                            // savedFieldValues に保存されたデータと現在の表示値を比較
-                            let allFieldsRestored = true;
-                            
-                            if (savedFieldValues[fieldKey]) {
-                                allFieldInputs.forEach((input, index) => {
-                                    const savedValue = savedFieldValues[fieldKey][index];
-                                    const currentValue = input.value;
-                                    
-                                    // 保存された値と現在の値が異なる場合、まだ復元されていない
-                                    if (savedValue !== undefined && savedValue !== currentValue) {
-                                        allFieldsRestored = false;
-                                    }
-                                });
-                            }
-                            
-                            const fieldBtn = document.querySelector(`.cfbe-clear-field-btn[data-field="${fieldKey}"]`);
-                            if (fieldBtn && allFieldsRestored) {
-                                // 全てのフィールドが復元されている場合、ボタンを初期状態に戻す
-                                fieldBtn.textContent = '削除';
-                                fieldBtn.classList.remove('cfbe-cleared');
-                                fieldBtn.title = 'この項目の全ての値を削除';
-                                
-                                // 行復元では savedFieldValues を削除しない（個別復元で必要な場合があるため）
-                                // delete savedFieldValues[fieldKey];
-                                
-                                console.log(`フィールド ${fieldKey} のボタンを「削除」状態に戻しました（行復元）`);
-                            } else if (fieldBtn) {
-                                console.log(`フィールド ${fieldKey} はまだ完全に復元されていません`);
-                            }
-                        }
-                    });
+                    // 関連するボタン状態は統合状態管理システムで自動処理
                     
-                    this.innerHTML = '行削除';
+                    this.innerHTML = '🗑️ 行削除';
                     this.classList.remove('cfbe-cleared');
                     this.title = 'この行の全フィールドを削除';
-                    
-                    // 追加の状態チェック: 全てのフィールドボタンの状態を再評価
-                    setTimeout(() => {
-                        document.querySelectorAll('.cfbe-clear-field-btn').forEach(btn => {
-                            const fieldKey = btn.dataset.field;
-                            if (fieldKey && savedFieldValues[fieldKey]) {
-                                const allFieldInputs = document.querySelectorAll(`td[data-field="${fieldKey}"] input[type="text"], td[data-field="${fieldKey}"] textarea`);
-                                let hasAnyEmptyField = false;
-                                
-                                // 現在の値が空のフィールドがあるかチェック
-                                allFieldInputs.forEach(input => {
-                                    if (input.value === '') {
-                                        hasAnyEmptyField = true;
-                                    }
-                                });
-                                
-                                // 空のフィールドがない場合、完全に復元されている
-                                if (!hasAnyEmptyField) {
-                                    btn.textContent = '削除';
-                                    btn.classList.remove('cfbe-cleared');
-                                    btn.title = 'この項目の全ての値を削除';
-                                    delete savedFieldValues[fieldKey];
-                                    console.log(`フィールド ${fieldKey} を完全復元状態に更新しました`);
-                                }
-                            }
-                        });
-                    }, 100);
                     
                     // 行復元時は、savedRowValuesから削除
                     delete savedRowValues[postId];
@@ -1681,16 +1613,13 @@ function cfbe_render_page() {
                         }
                     }
                     
-                    // 該当行のボタンのみ更新
-                    updateSpecificRowButton(postId);
-                    // 関連するフィールドボタンも更新
+                    // 統合状態管理で影響を受ける要素を更新
                     const affectedFieldKeys = new Set();
                     rowFieldInputs.forEach(input => {
                         const fieldKey = input.closest('td').dataset.field;
                         if (fieldKey) affectedFieldKeys.add(fieldKey);
                     });
-                    affectedFieldKeys.forEach(fieldKey => updateSpecificFieldButton(fieldKey));
-                    updateBulkButtonState();
+                    updateSpecificStates(Array.from(affectedFieldKeys), [postId]);
                 } else {
                     // 行削除処理（値を保存してから削除）
                     savedRowValues[postId] = [];
@@ -1733,25 +1662,14 @@ function cfbe_render_page() {
                         `投稿ID ${postId} の行を削除中`
                     );
                     
-                    // 関連する個別フィールドボタンの状態を更新
-                    Object.keys(rowFieldKeys).forEach(fieldKey => {
-                        const fieldBtn = document.querySelector(`.cfbe-clear-field-btn[data-field="${fieldKey}"]`);
-                        if (fieldBtn) {
-                            fieldBtn.textContent = '復元';
-                            fieldBtn.classList.add('cfbe-cleared');
-                            fieldBtn.title = 'この項目の値を復元';
-                        }
-                    });
+                    // 関連するボタン状態は統合管理で自動更新される
                     
                     this.innerHTML = '↩️ 行復元';
                     this.classList.add('cfbe-cleared');
                     this.title = 'この行のフィールドを復元';
                     
-                    // 該当行のボタンのみ更新
-                    updateSpecificRowButton(postId);
-                    // 関連するフィールドボタンも更新
-                    Object.keys(rowFieldKeys).forEach(fieldKey => updateSpecificFieldButton(fieldKey));
-                    updateBulkButtonState();
+                    // 統合状態管理で影響を受ける要素を更新
+                    updateSpecificStates(Object.keys(rowFieldKeys), [postId]);
                 }
             });
         });

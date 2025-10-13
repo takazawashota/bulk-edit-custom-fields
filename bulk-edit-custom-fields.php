@@ -866,6 +866,9 @@ function cfbe_render_page() {
                     this.textContent = '削除';
                     this.classList.remove('cfbe-cleared');
                     this.title = 'この項目の全ての値を削除';
+                    
+                    // 個別復元時は、savedFieldValuesから削除
+                    delete savedFieldValues[fieldKey];
                 } else {
                     // 削除処理（値を保存してから削除）
                     savedFieldValues[fieldKey] = [];
@@ -899,19 +902,44 @@ function cfbe_render_page() {
                 clearAllBtn.nextElementSibling.textContent = '※ 表示中の全ての入力値が削除されます';
                 allFieldsCleared = false;
                 
-                // 個別ボタンも初期状態に戻す
+                // 全ての個別ボタンを初期状態に戻す
                 document.querySelectorAll('.cfbe-clear-field-btn').forEach(btn => {
                     btn.textContent = '削除';
                     btn.classList.remove('cfbe-cleared');
                     btn.title = 'この項目の全ての値を削除';
                 });
-            } else {
-                // 全削除（値を保存してから削除）
+                
+                // 個別削除の履歴もクリア
+                Object.keys(savedFieldValues).forEach(key => {
+                    delete savedFieldValues[key];
+                });
+                
+                // allFieldsSavedをクリア
                 allFieldsSaved = {};
+            } else {
+                // 全削除（現在の表示値 + 個別削除済みの値を保存してから削除）
+                allFieldsSaved = {};
+                
                 allInputs.forEach((el, index) => {
-                    allFieldsSaved[index] = el.value;
+                    // 現在表示されている値を保存
+                    let valueToSave = el.value;
+                    
+                    // もしこの要素が個別削除されたフィールドに属している場合、
+                    // savedFieldValuesから元の値を取得
+                    const fieldKey = el.closest('td').dataset.field;
+                    if (fieldKey && savedFieldValues[fieldKey]) {
+                        // この要素のインデックスを取得
+                        const fieldInputs = document.querySelectorAll(`td[data-field="${fieldKey}"] input[type="text"], td[data-field="${fieldKey}"] textarea`);
+                        const elementIndex = Array.from(fieldInputs).indexOf(el);
+                        if (elementIndex !== -1 && savedFieldValues[fieldKey][elementIndex] !== undefined) {
+                            valueToSave = savedFieldValues[fieldKey][elementIndex];
+                        }
+                    }
+                    
+                    allFieldsSaved[index] = valueToSave;
                     el.value = '';
                 });
+                
                 clearAllBtn.innerHTML = '全てのフィールドを復元';
                 clearAllBtn.nextElementSibling.textContent = '※ 削除前の値に戻します';
                 allFieldsCleared = true;

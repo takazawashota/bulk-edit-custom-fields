@@ -29,6 +29,58 @@ function cfbe_add_admin_menu() {
     );
 }
 
+// AJAX保存ハンドラーを追加
+add_action('wp_ajax_cfbe_save_fields', 'cfbe_ajax_save_fields');
+function cfbe_ajax_save_fields() {
+    // デバッグ情報をログに出力
+    error_log('CFBE AJAX Save: 開始');
+    error_log('POST data: ' . print_r($_POST, true));
+    
+    // Nonce確認
+    if (!check_admin_referer('cfbe_bulk_edit', 'nonce')) {
+        error_log('CFBE AJAX Save: Nonce確認失敗');
+        wp_die('Security check failed');
+    }
+    
+    // 権限確認
+    if (!current_user_can('edit_posts')) {
+        error_log('CFBE AJAX Save: 権限確認失敗');
+        wp_die('Insufficient permissions');
+    }
+    
+    $chunk_data = json_decode(stripslashes($_POST['chunk_data']), true);
+    error_log('CFBE AJAX Save: デコードされたチャンクデータ: ' . print_r($chunk_data, true));
+    
+    $saved_count = 0;
+    $errors = [];
+    
+    if (is_array($chunk_data)) {
+        foreach ($chunk_data as $post_id => $fields) {
+            if (is_array($fields)) {
+                foreach ($fields as $field_key => $field_value) {
+                    $field_key = sanitize_text_field($field_key);
+                    $field_value = sanitize_textarea_field($field_value);
+                    
+                    $result = update_post_meta($post_id, $field_key, $field_value);
+                    if ($result) {
+                        $saved_count++;
+                        error_log("CFBE AJAX Save: 保存成功 - Post ID: {$post_id}, Field: {$field_key}, Value: {$field_value}");
+                    } else {
+                        error_log("CFBE AJAX Save: 保存失敗 - Post ID: {$post_id}, Field: {$field_key}");
+                    }
+                }
+            }
+        }
+    }
+    
+    error_log("CFBE AJAX Save: 完了 - 保存件数: {$saved_count}");
+    
+    wp_send_json_success([
+        'saved_count' => $saved_count,
+        'message' => "{$saved_count}件のフィールドを保存しました"
+    ]);
+}
+
 // 管理画面のページをレンダリング
 function cfbe_render_page() {
     // データ保存処理
@@ -302,28 +354,20 @@ function cfbe_render_page() {
         
         .cfbe-status {
             display: inline-block;
-            padding: 5px 12px;
-            background: #f0f0f1;
-            border-radius: 3px;
             font-size: 12px;
             font-weight: 500;
         }
         
         .cfbe-status-publish {
-            background: #00a32a;
-            color: #fff;
+            color: #00a32a;
         }
         
         .cfbe-status-draft {
-            background: #dba617;
-            color: #fff;
+            color: #dba617;
         }
         
         .cfbe-post-type {
             display: inline-block;
-            padding: 2px 6px;
-            background: #e0e0e0;
-            border-radius: 3px;
             font-size: 10px;
             font-weight: 500;
             color: #333;
@@ -339,8 +383,7 @@ function cfbe_render_page() {
         }
         
         .cfbe-page-id .cfbe-status {
-            padding: 2px 6px;
-            font-size: 10px;
+            font-size: 12px;
             margin: 0 2px;
         }
         
@@ -390,6 +433,32 @@ function cfbe_render_page() {
         .cfbe-clear-row-btn.cfbe-cleared:hover {
             background-color: #008a20 !important;
             border-color: #008a20 !important;
+        }
+        
+        /* 保存プログレスバーのスタイル */
+        .cfbe-progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #f1f1f1;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 5px;
+        }
+        
+        .cfbe-progress-fill {
+            height: 100%;
+            background-color: #00a32a;
+            transition: width 0.3s ease;
+        }
+        
+        .cfbe-progress-text {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        #cfbe-ajax-save-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
         }
         
         .cfbe-table a {
@@ -754,8 +823,16 @@ function cfbe_render_page() {
                     <span class="cfbe-help-text">※ 表示中の全ての入力値が削除されます</span>
                 </div>
                 <div class="cfbe-save-actions">
-                    <?php submit_button('変更を保存', 'primary large', 'cfbe_submit', false); ?>
+                    <button type="button" id="cfbe-ajax-save-btn" class="button button-primary button-large">
+                        変更を保存
+                    </button>
                     <span class="cfbe-help-text">※ 変更後、必ず保存ボタンをクリックしてください</span>
+                </div>
+                <div id="cfbe-save-progress" style="display: none; margin-top: 16px;">
+                    <div class="cfbe-progress-bar">
+                        <div class="cfbe-progress-fill" style="width: 0%;"></div>
+                    </div>
+                    <div class="cfbe-progress-text">保存中...</div>
                 </div>
             </div>
         </form>
@@ -768,6 +845,145 @@ function cfbe_render_page() {
     </div>
 
     <script>
+        // AJAX保存機能
+        document.addEventListener('DOMContentLoaded', function() {
+            const saveBtn = document.getElementById('cfbe-ajax-save-btn');
+            if (saveBtn) {
+                saveBtn.addEventListener('click', cfbeAjaxSave);
+            }
+        });
+        
+        async function cfbeAjaxSave() {
+            const saveBtn = document.getElementById('cfbe-ajax-save-btn');
+            const progressDiv = document.getElementById('cfbe-save-progress');
+            const progressFill = document.querySelector('.cfbe-progress-fill');
+            const progressText = document.querySelector('.cfbe-progress-text');
+            
+            // ボタンを無効化
+            saveBtn.disabled = true;
+            saveBtn.textContent = '保存中...';
+            progressDiv.style.display = 'block';
+            
+            try {
+                // フォームデータを収集
+                const formData = collectFormData();
+                console.log('収集されたフォームデータ:', formData);
+                
+                const chunks = chunkFormData(formData, 50); // 50件ずつ分割
+                console.log('チャンク分割結果:', chunks.length, 'chunks');
+                
+                if (chunks.length === 0) {
+                    throw new Error('保存するデータがありません');
+                }
+                
+                let savedTotal = 0;
+                
+                for (let i = 0; i < chunks.length; i++) {
+                    const progress = Math.round(((i + 1) / chunks.length) * 100);
+                    progressFill.style.width = progress + '%';
+                    progressText.textContent = `保存中... (${i + 1}/${chunks.length})`;
+                    
+                    console.log(`チャンク ${i + 1} を送信中:`, chunks[i]);
+                    
+                    const response = await fetch(ajaxurl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: new URLSearchParams({
+                            action: 'cfbe_save_fields',
+                            nonce: '<?php echo wp_create_nonce('cfbe_bulk_edit'); ?>',
+                            chunk_data: JSON.stringify(chunks[i])
+                        })
+                    });
+                    
+                    console.log('レスポンス:', response.status, response.statusText);
+                    
+                    const result = await response.json();
+                    console.log('結果:', result);
+                    
+                    if (result.success) {
+                        savedTotal += result.data.saved_count;
+                    } else {
+                        throw new Error(result.data || '保存に失敗しました');
+                    }
+                    
+                    // 少し待機
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+                
+                // 成功メッセージ
+                progressText.textContent = `完了: ${savedTotal}件のフィールドを保存しました`;
+                progressFill.style.backgroundColor = '#00a32a';
+                
+                // 3秒後にプログレスバーを非表示
+                setTimeout(() => {
+                    progressDiv.style.display = 'none';
+                }, 3000);
+                
+            } catch (error) {
+                console.error('保存エラー:', error);
+                progressText.textContent = 'エラー: ' + error.message;
+                progressFill.style.backgroundColor = '#d63638';
+            } finally {
+                // ボタンを再有効化
+                saveBtn.disabled = false;
+                saveBtn.textContent = '変更を保存';
+            }
+        }
+        
+        function collectFormData() {
+            const formData = {};
+            const inputs = document.querySelectorAll('.cfbe-table input, .cfbe-table textarea');
+            console.log('見つかった入力フィールド数:', inputs.length);
+            
+            inputs.forEach((input, index) => {
+                if (input.name && input.value !== '') {
+                    console.log(`フィールド ${index}: name="${input.name}", value="${input.value}"`);
+                    // input.name は "cfbe_field[post_id][field_key]" の形式
+                    const matches = input.name.match(/cfbe_field\[(\d+)\]\[(.+?)\]/);
+                    if (matches) {
+                        const postId = matches[1];
+                        const fieldKey = matches[2];
+                        
+                        if (!formData[postId]) {
+                            formData[postId] = {};
+                        }
+                        formData[postId][fieldKey] = input.value;
+                        console.log(`追加: postId=${postId}, fieldKey=${fieldKey}, value=${input.value}`);
+                    } else {
+                        console.log('マッチしなかったフィールド:', input.name);
+                    }
+                }
+            });
+            
+            console.log('最終的なフォームデータ:', formData);
+            return formData;
+        }
+        
+        function chunkFormData(formData, chunkSize) {
+            const chunks = [];
+            let currentChunk = {};
+            let currentCount = 0;
+            
+            for (const postId in formData) {
+                currentChunk[postId] = formData[postId];
+                currentCount++;
+                
+                if (currentCount >= chunkSize) {
+                    chunks.push(currentChunk);
+                    currentChunk = {};
+                    currentCount = 0;
+                }
+            }
+            
+            if (currentCount > 0) {
+                chunks.push(currentChunk);
+            }
+            
+            return chunks;
+        }
+        
         function cfbeFilterFields() {
             const selectedField = document.getElementById('cfbe_filter_field').value;
             const headers = document.querySelectorAll('.cfbe-field-header');

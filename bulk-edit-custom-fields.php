@@ -347,12 +347,6 @@ function becf_render_page() {
             outline: none;
         }
         
-        .becf-status {
-            display: inline-block;
-            font-size: 12px;
-            font-weight: 500;
-        }
-        
         .becf-status-publish {
             color: #00a32a;
         }
@@ -375,11 +369,6 @@ function becf_render_page() {
             margin-top: 5px;
             font-weight: normal;
             line-height: 1.4;
-        }
-        
-        .becf-page-id .becf-status {
-            font-size: 12px;
-            margin: 0 2px;
         }
         
         .becf-submit-section {
@@ -1044,7 +1033,7 @@ function becf_render_page() {
             <!-- カスタムフィールドキー表示機能 -->
             <div class="becf-field-keys-section" style="margin-top: 20px; padding: 15px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">
                 <a href="#" id="toggle-field-keys" style="text-decoration: none; color: #0073aa;">
-                    📋 収集されたカスタムフィールドキーを表示 (<?php echo count($custom_field_keys); ?>個)
+                    収集されたカスタムフィールドキーを表示 (<?php echo count($custom_field_keys); ?>個)
                 </a>
                 <div id="field-keys-list" style="display: none; margin-top: 15px;">
                     <h4 style="margin-top: 0;">カスタムフィールドキー一覧</h4>
@@ -1096,10 +1085,10 @@ function becf_render_page() {
                     
                     if (fieldKeysList.style.display === 'none') {
                         fieldKeysList.style.display = 'block';
-                        toggleButton.innerHTML = '📋 カスタムフィールドキーを非表示 (<?php echo count($custom_field_keys); ?>個)';
+                        toggleButton.innerHTML = 'カスタムフィールドキーを非表示 (<?php echo count($custom_field_keys); ?>個)';
                     } else {
                         fieldKeysList.style.display = 'none';
-                        toggleButton.innerHTML = '📋 収集されたカスタムフィールドキーを表示 (<?php echo count($custom_field_keys); ?>個)';
+                        toggleButton.innerHTML = '収集されたカスタムフィールドキーを表示 (<?php echo count($custom_field_keys); ?>個)';
                     }
                 });
             }
@@ -1163,7 +1152,7 @@ function becf_render_page() {
                     }
                 }
                 
-                console.log('📊 フォームデータ統計:', {
+                console.log('フォームデータ統計:', {
                     投稿数: totalPosts,
                     総フィールド数: totalFields,
                     空のフィールド数: emptyFields,

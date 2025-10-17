@@ -99,9 +99,6 @@ function becf_render_page() {
         echo '<div class="notice notice-success is-dismissible"><p>カスタムフィールドを更新しました。</p></div>';
     }
 
-    // デバッグモード
-    $debug_mode = isset($_GET['debug']) && $_GET['debug'] == '1';
-
     // 選択された投稿タイプを取得
     $selected_post_type = isset($_GET['post_type']) ? sanitize_text_field($_GET['post_type']) : 'all';
     
@@ -137,38 +134,6 @@ function becf_render_page() {
         'order' => 'ASC'
     );
     $posts = get_posts($args);
-
-    if ($debug_mode) {
-        echo '<div class="notice notice-info"><h3>デバッグ情報</h3>';
-        echo '<p>取得した投稿数: ' . count($posts) . ' / 全体: ' . $total_posts . '件</p>';
-        echo '<p>現在ページ: ' . $current_page . ' / 全ページ: ' . $total_pages . '</p>';
-        echo '<p>1ページあたり: ' . $posts_per_page . '件</p>';
-        echo '<p>選択された投稿タイプ: ' . esc_html($selected_post_type) . '</p>';
-        echo '<p>利用可能な投稿タイプ: ' . implode(', ', array_keys($post_types)) . '</p>';
-        if (!empty($posts)) {
-            $first_post = $posts[0];
-            echo '<p>最初の投稿ID: ' . $first_post->ID . '</p>';
-            echo '<p>最初の投稿タイトル: ' . esc_html($first_post->post_title) . '</p>';
-            echo '<p>最初の投稿タイプ: ' . esc_html($first_post->post_type) . '</p>';
-            
-            $all_meta = get_post_meta($first_post->ID);
-            echo '<p>最初の投稿の全メタデータ（get_post_meta）:</p>';
-            echo '<pre style="max-height: 300px; overflow: auto; background: #f0f0f0; padding: 10px;">' . print_r($all_meta, true) . '</pre>';
-            
-            // 個別にメタデータを取得してみる
-            echo '<h4>個別取得テスト:</h4>';
-            if (is_array($all_meta)) {
-                foreach ($all_meta as $key => $values) {
-                    if (substr($key, 0, 1) !== '_') {
-                        $single_value = get_post_meta($first_post->ID, $key, true);
-                        echo '<p><strong>' . esc_html($key) . '</strong>: ';
-                        echo '<code>' . esc_html(print_r($single_value, true)) . '</code></p>';
-                    }
-                }
-            }
-        }
-        echo '</div>';
-    }
 
     // カスタムフィールドのキーを収集
     $custom_field_keys = array();
@@ -726,39 +691,88 @@ function becf_render_page() {
         .becf-add-btn:hover {
             background-color: #005a87;
         }
+        
+        /* カスタムフィールドキー表示セクション */
+        .becf-field-keys-section {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        #toggle-field-keys {
+            text-decoration: none;
+            color: #0073aa;
+            font-weight: 500;
+            display: inline-block;
+            padding: 5px 0;
+            border-bottom: 1px dotted #0073aa;
+            transition: color 0.2s ease;
+        }
+        
+        #toggle-field-keys:hover {
+            color: #005a87;
+            border-bottom-color: #005a87;
+        }
+        
+        #field-keys-list {
+            margin-top: 15px;
+        }
+        
+        #field-keys-list h4 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            color: #23282d;
+            font-size: 14px;
+        }
+        
+        #field-keys-list ul {
+            margin: 0;
+            padding-left: 20px;
+            columns: 3;
+            column-gap: 20px;
+            list-style-type: disc;
+        }
+        
+        #field-keys-list li {
+            break-inside: avoid;
+            margin-bottom: 5px;
+            font-size: 13px;
+        }
+        
+        #field-keys-list code {
+            background: #f1f1f1;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: Consolas, Monaco, monospace;
+            font-size: 12px;
+        }
+        
+        /* レスポンシブ対応 */
+        @media (max-width: 1200px) {
+            #field-keys-list ul {
+                columns: 2;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            #field-keys-list ul {
+                columns: 1;
+            }
+        }
     </style>
 
-    <div class="wrap becf-wrap <?php echo $debug_mode ? 'becf-debug-mode' : ''; ?>">
+    <div class="wrap becf-wrap">
         <h1>
             Bulk Edit Custom Fields
-            <?php if ($debug_mode): ?>
-                <span class="becf-debug-badge">🔍 デバッグモード</span>
-            <?php endif; ?>
         </h1>
-        
-        <?php if ($debug_mode): ?>
-            <div class="notice notice-info">
-                <h3>収集されたカスタムフィールドキー</h3>
-                <pre><?php print_r(array_keys($custom_field_keys)); ?></pre>
-                
-                <h3>最初の投稿のデータ構造（$post_data）</h3>
-                <?php if (!empty($post_data)): ?>
-                    <?php $first_post_id = array_key_first($post_data); ?>
-                    <pre style="max-height: 300px; overflow: auto; background: #f0f0f0; padding: 10px;"><?php print_r($post_data[$first_post_id]); ?></pre>
-                <?php endif; ?>
-            </div>
-        <?php endif; ?>
         
         <div class="becf-info">
             <p>
                 <strong>投稿表示:</strong> <?php echo count($posts); ?> 件 (全体: <?php echo $total_posts; ?> 件) | 
                 <strong>ページ:</strong> <?php echo $current_page; ?> / <?php echo $total_pages; ?> | 
                 <strong>カスタムフィールド数:</strong> <?php echo count($custom_field_keys); ?> 種類
-                <?php if (!$debug_mode): ?>
-                    | <a href="?page=bulk-edit-custom-fields&post_type=<?php echo esc_attr($selected_post_type); ?>&paged=<?php echo $current_page; ?>&debug=1">デバッグモードで開く</a>
-                <?php else: ?>
-                    | <a href="?page=bulk-edit-custom-fields&post_type=<?php echo esc_attr($selected_post_type); ?>&paged=<?php echo $current_page; ?>" style="color: #d63384; font-weight: bold;">🔙 通常モードに戻る</a>
-                <?php endif; ?>
             </p>
         </div>
         
@@ -828,13 +842,10 @@ function becf_render_page() {
 
             <?php
             // ページネーション表示関数
-            function becf_render_pagination($current_page, $total_pages, $selected_post_type, $debug_mode = false) {
+            function becf_render_pagination($current_page, $total_pages, $selected_post_type) {
                 if ($total_pages <= 1) return;
                 
                 $base_url = '?page=bulk-edit-custom-fields&post_type=' . urlencode($selected_post_type);
-                if ($debug_mode) {
-                    $base_url .= '&debug=1';
-                }
                 
                 echo '<div class="becf-pagination">';
                 echo '<span class="becf-pagination-info">ページ ' . $current_page . ' / ' . $total_pages . '</span>';
@@ -879,7 +890,7 @@ function becf_render_page() {
             }
             
             // 上部ページネーション
-            becf_render_pagination($current_page, $total_pages, $selected_post_type, $debug_mode);
+            becf_render_pagination($current_page, $total_pages, $selected_post_type);
             ?>
 
             <div class="becf-table-wrapper">
@@ -1006,7 +1017,7 @@ function becf_render_page() {
 
             <?php
             // 下部ページネーション
-            becf_render_pagination($current_page, $total_pages, $selected_post_type, $debug_mode);
+            becf_render_pagination($current_page, $total_pages, $selected_post_type);
             ?>
 
             <div class="becf-submit-section">
@@ -1029,6 +1040,32 @@ function becf_render_page() {
                     <div class="becf-progress-text">保存中...</div>
                 </div>
             </div>
+            
+            <!-- カスタムフィールドキー表示機能 -->
+            <div class="becf-field-keys-section" style="margin-top: 20px; padding: 15px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">
+                <a href="#" id="toggle-field-keys" style="text-decoration: none; color: #0073aa;">
+                    📋 収集されたカスタムフィールドキーを表示 (<?php echo count($custom_field_keys); ?>個)
+                </a>
+                <div id="field-keys-list" style="display: none; margin-top: 15px;">
+                    <h4 style="margin-top: 0;">カスタムフィールドキー一覧</h4>
+                    <div style="max-height: 300px; overflow-y: auto; background: white; padding: 10px; border: 1px solid #ccc; border-radius: 3px;">
+                        <?php if (!empty($custom_field_keys)): ?>
+                            <ul style="margin: 0; columns: 3; column-gap: 20px; list-style-type: disc;">
+                                <?php foreach (array_keys($custom_field_keys) as $field_key): ?>
+                                    <li style="break-inside: avoid; margin-bottom: 5px;">
+                                        <code style="background: #f1f1f1; padding: 2px 4px; border-radius: 3px;"><?php echo esc_html($field_key); ?></code>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
+                        <?php else: ?>
+                            <p style="margin: 0; color: #666;">カスタムフィールドが見つかりませんでした。</p>
+                        <?php endif; ?>
+                    </div>
+                    <p style="margin-top: 10px; font-size: 13px; color: #666;">
+                        <strong>注意:</strong> アンダースコア(_)で始まるWordPress内部フィールドは除外されています。
+                    </p>
+                </div>
+            </div>
         </form>
         
         <!-- 一括削除確認モーダル -->
@@ -1047,6 +1084,24 @@ function becf_render_page() {
             const saveBtn = document.getElementById('becf-ajax-save-btn');
             if (saveBtn) {
                 saveBtn.addEventListener('click', cfbeAjaxSave);
+            }
+            
+            // カスタムフィールドキー表示機能
+            const toggleButton = document.getElementById('toggle-field-keys');
+            const fieldKeysList = document.getElementById('field-keys-list');
+            
+            if (toggleButton && fieldKeysList) {
+                toggleButton.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    
+                    if (fieldKeysList.style.display === 'none') {
+                        fieldKeysList.style.display = 'block';
+                        toggleButton.innerHTML = '📋 カスタムフィールドキーを非表示 (<?php echo count($custom_field_keys); ?>個)';
+                    } else {
+                        fieldKeysList.style.display = 'none';
+                        toggleButton.innerHTML = '📋 収集されたカスタムフィールドキーを表示 (<?php echo count($custom_field_keys); ?>個)';
+                    }
+                });
             }
         });
         

@@ -192,10 +192,6 @@ function becf_render_page() {
     ?>
 
     <style>
-        .becf-wrap {
-            margin: 20px 20px 20px 0;
-        }
-        
         .becf-info {
             background: #fff;
             border-left: 4px solid #72aee6;
